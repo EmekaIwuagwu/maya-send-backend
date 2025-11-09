@@ -32,12 +32,12 @@ router.get('/auth/me', authenticateAdmin, adminAuthController.getProfile);
 router.get(
   '/dashboard/overview',
   authenticateAdmin,
-  adminDashboardController.handler
+  adminDashboardController.getOverview
 );
 router.get(
   '/dashboard/analytics',
   authenticateAdmin,
-  adminDashboardController.handler
+  adminDashboardController.getAnalytics
 );
 
 // ============= USER MANAGEMENT =============
@@ -45,66 +45,66 @@ router.get(
   '/users',
   authenticateAdmin,
   requirePermission(AdminPermission.VIEW_USERS),
-  adminUsersController.handler
+  adminUsersController.getUsers
 );
 router.get(
   '/users/:id',
   authenticateAdmin,
   requirePermission(AdminPermission.VIEW_USERS),
-  adminUsersController.handler
+  adminUsersController.getUserDetails
 );
 router.put(
   '/users/:id',
   authenticateAdmin,
   requirePermission(AdminPermission.EDIT_USERS),
   auditLog(AuditAction.USER_UPDATED, 'users'),
-  adminUsersController.handler
+  adminUsersController.updateUser
 );
 router.post(
   '/users/:id/suspend',
   authenticateAdmin,
   requirePermission(AdminPermission.SUSPEND_USERS),
   auditLog(AuditAction.USER_SUSPENDED, 'users'),
-  adminUsersController.handler
+  adminUsersController.suspendUser
 );
 router.post(
   '/users/:id/unsuspend',
   authenticateAdmin,
   requirePermission(AdminPermission.SUSPEND_USERS),
   auditLog(AuditAction.USER_UPDATED, 'users'),
-  adminUsersController.handler
+  adminUsersController.unsuspendUser
 );
 router.post(
   '/users/:id/flag',
   authenticateAdmin,
   requirePermission(AdminPermission.EDIT_USERS),
-  adminUsersController.handler
+  adminUsersController.flagUser
 );
 router.post(
   '/users/:id/unflag',
   authenticateAdmin,
   requirePermission(AdminPermission.EDIT_USERS),
-  adminUsersController.handler
+  adminUsersController.unflagUser
 );
 router.post(
   '/users/:id/adjust-balance',
   authenticateAdmin,
   requireRole('SUPER_ADMIN'),
   auditLog(AuditAction.USER_UPDATED, 'users'),
-  adminUsersController.handler
+  adminUsersController.adjustBalance
 );
 router.post(
   '/users/:id/notes',
   authenticateAdmin,
   requirePermission(AdminPermission.VIEW_USERS),
-  adminUsersController.handler
+  adminUsersController.addNote
 );
 router.delete(
   '/users/:id',
   authenticateAdmin,
   requirePermission(AdminPermission.DELETE_USERS),
   auditLog(AuditAction.USER_DELETED, 'users'),
-  adminUsersController.handler
+  adminUsersController.deleteUser
 );
 
 // ============= TRANSACTION MANAGEMENT =============
@@ -112,28 +112,28 @@ router.get(
   '/transactions',
   authenticateAdmin,
   requirePermission(AdminPermission.VIEW_TRANSACTIONS),
-  adminTransactionsController.handler
+  adminTransactionsController.getTransactions
 );
 router.get(
   '/transactions/:id',
   authenticateAdmin,
   requirePermission(AdminPermission.VIEW_TRANSACTIONS),
   auditLog(AuditAction.TRANSACTION_VIEWED, 'transactions'),
-  adminTransactionsController.handler
+  adminTransactionsController.getTransactionDetails
 );
 router.post(
   '/transactions/:id/flag',
   authenticateAdmin,
   requirePermission(AdminPermission.EDIT_TRANSACTIONS),
   auditLog(AuditAction.TRANSACTION_FLAGGED, 'transactions'),
-  adminTransactionsController.handler
+  adminTransactionsController.flagTransaction
 );
 router.post(
   '/transactions/:id/refund',
   authenticateAdmin,
   requirePermission(AdminPermission.REFUND_TRANSACTIONS),
   auditLog(AuditAction.TRANSACTION_REFUNDED, 'transactions'),
-  adminTransactionsController.handler
+  adminTransactionsController.refundTransaction
 );
 
 // ============= EMAIL PAYMENT MANAGEMENT =============
@@ -141,19 +141,19 @@ router.get(
   '/email-payments',
   authenticateAdmin,
   requirePermission(AdminPermission.VIEW_EMAIL_PAYMENTS),
-  adminEmailPaymentsController.handler
+  adminEmailPaymentsController.getEmailPayments
 );
 router.post(
   '/email-payments/:id/cancel',
   authenticateAdmin,
   requirePermission(AdminPermission.MANAGE_EMAIL_PAYMENTS),
-  adminEmailPaymentsController.handler
+  adminEmailPaymentsController.cancelEmailPayment
 );
 router.post(
   '/email-payments/:id/extend',
   authenticateAdmin,
   requirePermission(AdminPermission.MANAGE_EMAIL_PAYMENTS),
-  adminEmailPaymentsController.handler
+  adminEmailPaymentsController.extendEmailPayment
 );
 
 // ============= KYC MANAGEMENT =============
@@ -161,21 +161,21 @@ router.get(
   '/kyc/pending',
   authenticateAdmin,
   requirePermission(AdminPermission.VIEW_KYC),
-  adminKYCController.handler
+  adminKYCController.getPendingKYC
 );
 router.post(
   '/kyc/:userId/approve',
   authenticateAdmin,
   requirePermission(AdminPermission.APPROVE_KYC),
   auditLog(AuditAction.KYC_APPROVED, 'users'),
-  adminKYCController.handler
+  adminKYCController.approveKYC
 );
 router.post(
   '/kyc/:userId/reject',
   authenticateAdmin,
   requirePermission(AdminPermission.REJECT_KYC),
   auditLog(AuditAction.KYC_REJECTED, 'users'),
-  adminKYCController.handler
+  adminKYCController.rejectKYC
 );
 
 // ============= WITHDRAWAL MANAGEMENT =============
@@ -183,21 +183,21 @@ router.get(
   '/withdrawals',
   authenticateAdmin,
   requirePermission(AdminPermission.VIEW_WITHDRAWALS),
-  adminWithdrawalsController.handler
+  adminWithdrawalsController.getWithdrawals
 );
 router.post(
   '/withdrawals/:id/approve',
   authenticateAdmin,
   requirePermission(AdminPermission.APPROVE_WITHDRAWALS),
   auditLog(AuditAction.WITHDRAWAL_APPROVED, 'withdrawals'),
-  adminWithdrawalsController.handler
+  adminWithdrawalsController.approveWithdrawal
 );
 router.post(
   '/withdrawals/:id/reject',
   authenticateAdmin,
   requirePermission(AdminPermission.APPROVE_WITHDRAWALS),
   auditLog(AuditAction.WITHDRAWAL_REJECTED, 'withdrawals'),
-  adminWithdrawalsController.handler
+  adminWithdrawalsController.rejectWithdrawal
 );
 
 // ============= DISPUTE MANAGEMENT =============
@@ -205,20 +205,20 @@ router.get(
   '/disputes',
   authenticateAdmin,
   requirePermission(AdminPermission.VIEW_DISPUTES),
-  adminDisputesController.handler
+  adminDisputesController.getDisputes
 );
 router.post(
   '/disputes/:id/assign',
   authenticateAdmin,
   requirePermission(AdminPermission.RESOLVE_DISPUTES),
-  adminDisputesController.handler
+  adminDisputesController.assignDispute
 );
 router.post(
   '/disputes/:id/resolve',
   authenticateAdmin,
   requirePermission(AdminPermission.RESOLVE_DISPUTES),
   auditLog(AuditAction.DISPUTE_RESOLVED, 'disputes'),
-  adminDisputesController.handler
+  adminDisputesController.resolveDispute
 );
 
 // ============= FRAUD MANAGEMENT =============
@@ -278,14 +278,14 @@ router.get(
   '/settings',
   authenticateAdmin,
   requirePermission(AdminPermission.VIEW_SETTINGS),
-  adminSettingsController.handler
+  adminSettingsController.getSettings
 );
 router.put(
   '/settings/:key',
   authenticateAdmin,
   requirePermission(AdminPermission.EDIT_SETTINGS),
   auditLog(AuditAction.SETTINGS_CHANGED, 'settings'),
-  adminSettingsController.handler
+  adminSettingsController.updateSetting
 );
 
 // ============= REPORTS =============
@@ -316,13 +316,13 @@ router.post(
 );
 
 // ============= ANALYTICS =============
-router.get('/analytics/users', authenticateAdmin, adminAnalyticsController.handler);
+router.get('/analytics/users', authenticateAdmin, adminAnalyticsController.getUserAnalytics);
 router.get(
   '/analytics/transactions',
   authenticateAdmin,
-  adminAnalyticsController.handler
+  adminAnalyticsController.getTransactionAnalytics
 );
-router.get('/analytics/revenue', authenticateAdmin, adminAnalyticsController.handler);
+router.get('/analytics/revenue', authenticateAdmin, adminAnalyticsController.getRevenueAnalytics);
 
 // ============= AUDIT LOGS =============
 router.get(
@@ -339,18 +339,18 @@ router.get(
 );
 
 // ============= SYSTEM =============
-router.get('/system/health', authenticateAdmin, adminSystemController.handler);
+router.get('/system/health', authenticateAdmin, adminSystemController.getHealth);
 router.post(
   '/system/clear-cache',
   authenticateAdmin,
   requireRole('SUPER_ADMIN'),
-  adminSystemController.handler
+  adminSystemController.clearCache
 );
 router.post(
   '/system/maintenance',
   authenticateAdmin,
   requireRole('SUPER_ADMIN'),
-  adminSystemController.handler
+  adminSystemController.toggleMaintenance
 );
 
 export default router;
