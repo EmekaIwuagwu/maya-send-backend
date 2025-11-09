@@ -1,0 +1,644 @@
+// This is your Prisma schema file
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============= USER MODELS =============
+
+enum KYCStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum UserRole {
+  USER
+  MERCHANT
+  ADMIN
+}
+
+model User {
+  id                String         @id @default(uuid())
+  email             String         @unique
+  phone             String?        @unique
+  fullName          String
+  password          String
+  role              UserRole       @default(USER)
+
+  // KYC
+  kycStatus         KYCStatus      @default(UNVERIFIED)
+  kycSubmittedAt    DateTime?
+  kycVerifiedAt     DateTime?
+  kycRejectedAt     DateTime?
+  kycRejectionReason String?
+  kycDocuments      Json?          // Store document URLs/metadata
+
+  // Security
+  twoFactorEnabled  Boolean        @default(false)
+  twoFactorSecret   String?
+
+  // Status
+  isActive          Boolean        @default(true)
+  isSuspended       Boolean        @default(false)
+  isFlagged         Boolean        @default(false)
+  suspendedAt       DateTime?
+  suspensionReason  String?
+
+  // Tracking
+  lastLoginAt       DateTime?
+  lastLoginIP       String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  // Relations
+  wallets           Wallet[]
+  transactions      Transaction[]  @relation("SenderTransactions")
+  receivedTransactions Transaction[] @relation("RecipientTransactions")
+  emailPayments     EmailPayment[] @relation("SenderEmailPayments")
+  receivedEmailPayments EmailPayment[] @relation("RecipientEmailPayments")
+  escrows           Escrow[]       @relation("BuyerEscrows")
+  sellerEscrows     Escrow[]       @relation("SellerEscrows")
+  withdrawals       Withdrawal[]
+  disputes          Dispute[]
+  adminNotes        AdminNote[]
+  sessions          UserSession[]
+
+  @@index([email])
+  @@index([kycStatus])
+  @@index([isFlagged])
+  @@index([isSuspended])
+}
+
+model UserSession {
+  id              String   @id @default(uuid())
+  userId          String
+  token           String   @unique
+  refreshToken    String?  @unique
+  ipAddress       String?
+  userAgent       String?
+  isActive        Boolean  @default(true)
+  expiresAt       DateTime
+  lastActivityAt  DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
+
+// ============= WALLET MODELS =============
+
+enum Currency {
+  USDC
+  SOL
+}
+
+model Wallet {
+  id              String         @id @default(uuid())
+  userId          String
+  currency        Currency       @default(USDC)
+  publicKey       String         @unique
+  balance         Decimal        @default(0) @db.Decimal(20, 6)
+  isActive        Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([publicKey])
+}
+
+// ============= TRANSACTION MODELS =============
+
+enum TransactionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum TransactionType {
+  SEND
+  RECEIVE
+  EMAIL_PAYMENT
+  ESCROW
+  WITHDRAWAL
+  REFUND
+}
+
+model Transaction {
+  id                String            @id @default(uuid())
+  senderId          String?
+  recipientId       String?
+  recipientEmail    String?
+  amount            Decimal           @db.Decimal(20, 6)
+  fee               Decimal           @default(0) @db.Decimal(20, 6)
+  currency          Currency          @default(USDC)
+  status            TransactionStatus @default(PENDING)
+  transactionType   TransactionType
+
+  // Blockchain
+  signature         String?           @unique
+  blockchainConfirmed Boolean         @default(false)
+  confirmations     Int               @default(0)
+
+  // Metadata
+  description       String?
+  metadata          Json?
+
+  // Fraud detection
+  isFlagged         Boolean           @default(false)
+  flagReason        String?
+  reviewedAt        DateTime?
+  reviewedBy        String?
+
+  // Related entities
+  emailPaymentId    String?
+  escrowId          String?
+  withdrawalId      String?
+
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  // Relations
+  sender            User?             @relation("SenderTransactions", fields: [senderId], references: [id], onDelete: SetNull)
+  recipient         User?             @relation("RecipientTransactions", fields: [recipientId], references: [id], onDelete: SetNull)
+  emailPayment      EmailPayment?     @relation(fields: [emailPaymentId], references: [id])
+  escrow            Escrow?           @relation(fields: [escrowId], references: [id])
+  withdrawal        Withdrawal?       @relation(fields: [withdrawalId], references: [id])
+  disputes          Dispute[]
+  fraudAlerts       FraudAlert[]
+
+  @@index([senderId])
+  @@index([recipientId])
+  @@index([status])
+  @@index([transactionType])
+  @@index([createdAt])
+  @@index([isFlagged])
+}
+
+// ============= EMAIL PAYMENT MODELS =============
+
+enum EmailPaymentStatus {
+  PENDING
+  CLAIMED
+  EXPIRED
+  CANCELLED
+  REFUNDED
+}
+
+model EmailPayment {
+  id              String              @id @default(uuid())
+  senderId        String
+  recipientEmail  String
+  recipientId     String?
+  amount          Decimal             @db.Decimal(20, 6)
+  currency        Currency            @default(USDC)
+  status          EmailPaymentStatus  @default(PENDING)
+  securityQuestion String?
+  securityAnswer  String?
+  message         String?
+  claimToken      String              @unique
+  expiresAt       DateTime
+  claimedAt       DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  sender          User                @relation("SenderEmailPayments", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient       User?               @relation("RecipientEmailPayments", fields: [recipientId], references: [id], onDelete: SetNull)
+  transactions    Transaction[]
+
+  @@index([senderId])
+  @@index([recipientEmail])
+  @@index([status])
+  @@index([claimToken])
+}
+
+// ============= ESCROW MODELS =============
+
+enum EscrowStatus {
+  PENDING
+  FUNDED
+  IN_DISPUTE
+  RELEASED
+  REFUNDED
+  CANCELLED
+}
+
+model Escrow {
+  id              String        @id @default(uuid())
+  buyerId         String
+  sellerId        String
+  amount          Decimal       @db.Decimal(20, 6)
+  currency        Currency      @default(USDC)
+  status          EscrowStatus  @default(PENDING)
+  description     String?
+  terms           String?
+  releaseConditions String?
+
+  // Timelock
+  releaseDate     DateTime?
+  autoRelease     Boolean       @default(false)
+
+  // Milestone tracking
+  milestones      Json?
+
+  fundedAt        DateTime?
+  releasedAt      DateTime?
+  refundedAt      DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  buyer           User          @relation("BuyerEscrows", fields: [buyerId], references: [id], onDelete: Cascade)
+  seller          User          @relation("SellerEscrows", fields: [sellerId], references: [id], onDelete: Cascade)
+  transactions    Transaction[]
+  disputes        Dispute[]
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([status])
+}
+
+// ============= WITHDRAWAL MODELS =============
+
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  PROCESSING
+  COMPLETED
+  REJECTED
+  FAILED
+}
+
+model Withdrawal {
+  id              String            @id @default(uuid())
+  userId          String
+  amount          Decimal           @db.Decimal(20, 6)
+  currency        Currency          @default(USDC)
+  destinationAddress String
+  status          WithdrawalStatus  @default(PENDING)
+
+  // Approval
+  approvedAt      DateTime?
+  approvedBy      String?
+  rejectedAt      DateTime?
+  rejectedBy      String?
+  rejectionReason String?
+
+  // Processing
+  processedAt     DateTime?
+  signature       String?           @unique
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions    Transaction[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+// ============= DISPUTE MODELS =============
+
+enum DisputeStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum DisputeResolution {
+  BUYER_FAVOR
+  SELLER_FAVOR
+  PARTIAL_REFUND
+  NO_RESOLUTION
+}
+
+model Dispute {
+  id              String             @id @default(uuid())
+  userId          String
+  transactionId   String?
+  escrowId        String?
+  type            String
+  reason          String
+  description     String
+  status          DisputeStatus      @default(OPEN)
+  resolution      DisputeResolution?
+  resolutionNotes String?
+
+  // Assignment
+  assignedTo      String?
+  assignedAt      DateTime?
+
+  // Evidence
+  evidence        Json?
+
+  resolvedAt      DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transaction     Transaction?       @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  escrow          Escrow?            @relation(fields: [escrowId], references: [id], onDelete: SetNull)
+  admin           Admin?             @relation(fields: [assignedTo], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@index([assignedTo])
+}
+
+// ============= ADMIN MODELS =============
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  SUPPORT
+  COMPLIANCE
+  FINANCE
+}
+
+enum AdminPermission {
+  // User management
+  VIEW_USERS
+  EDIT_USERS
+  SUSPEND_USERS
+  DELETE_USERS
+
+  // Transaction management
+  VIEW_TRANSACTIONS
+  EDIT_TRANSACTIONS
+  REFUND_TRANSACTIONS
+
+  // KYC management
+  VIEW_KYC
+  APPROVE_KYC
+  REJECT_KYC
+
+  // Withdrawal management
+  VIEW_WITHDRAWALS
+  APPROVE_WITHDRAWALS
+
+  // Dispute management
+  VIEW_DISPUTES
+  RESOLVE_DISPUTES
+
+  // Email payment management
+  VIEW_EMAIL_PAYMENTS
+  MANAGE_EMAIL_PAYMENTS
+
+  // Fraud management
+  VIEW_FRAUD_ALERTS
+  MANAGE_FRAUD_RULES
+
+  // Reports
+  VIEW_REPORTS
+  GENERATE_REPORTS
+
+  // Settings
+  VIEW_SETTINGS
+  EDIT_SETTINGS
+
+  // Audit logs
+  VIEW_AUDIT_LOGS
+
+  // System
+  SYSTEM_ADMIN
+}
+
+model Admin {
+  id              String            @id @default(uuid())
+  email           String            @unique
+  password        String
+  fullName        String
+  role            AdminRole         @default(ADMIN)
+  permissions     AdminPermission[]
+
+  // Security
+  twoFactorEnabled Boolean          @default(false)
+  twoFactorSecret String?
+  allowedIPs      String[]
+
+  // Status
+  isActive        Boolean           @default(true)
+  isSuspended     Boolean           @default(false)
+
+  lastLoginAt     DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  sessions        AdminSession[]
+  auditLogs       AuditLog[]
+  reports         Report[]
+  adminNotes      AdminNote[]
+  disputes        Dispute[]
+
+  @@index([email])
+}
+
+model AdminSession {
+  id              String   @id @default(uuid())
+  adminId         String
+  token           String   @unique
+  refreshToken    String?  @unique
+  ipAddress       String?
+  userAgent       String?
+  isActive        Boolean  @default(true)
+  expiresAt       DateTime
+  lastActivityAt  DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  admin           Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([token])
+}
+
+enum AuditAction {
+  // User actions
+  USER_CREATED
+  USER_UPDATED
+  USER_DELETED
+  USER_SUSPENDED
+  USER_UNSUSPENDED
+  USER_FLAGGED
+
+  // Transaction actions
+  TRANSACTION_VIEWED
+  TRANSACTION_FLAGGED
+  TRANSACTION_REFUNDED
+
+  // KYC actions
+  KYC_APPROVED
+  KYC_REJECTED
+
+  // Withdrawal actions
+  WITHDRAWAL_APPROVED
+  WITHDRAWAL_REJECTED
+
+  // Dispute actions
+  DISPUTE_RESOLVED
+
+  // Fraud actions
+  FRAUD_ALERT_CREATED
+  FRAUD_RULE_ADDED
+  FRAUD_RULE_UPDATED
+
+  // Report actions
+  REPORT_GENERATED
+
+  // Settings actions
+  SETTINGS_CHANGED
+
+  // System actions
+  SYSTEM_MAINTENANCE
+}
+
+model AuditLog {
+  id              String       @id @default(uuid())
+  adminId         String
+  action          AuditAction
+  resourceType    String?
+  resourceId      String?
+  ipAddress       String?
+  userAgent       String?
+  metadata        Json?
+  createdAt       DateTime     @default(now())
+
+  admin           Admin        @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([action])
+  @@index([resourceType])
+  @@index([createdAt])
+}
+
+model AdminNote {
+  id              String   @id @default(uuid())
+  userId          String
+  adminId         String
+  note            String
+  isInternal      Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  admin           Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([adminId])
+}
+
+// ============= FRAUD DETECTION MODELS =============
+
+enum FraudAlertStatus {
+  OPEN
+  INVESTIGATING
+  RESOLVED
+  FALSE_POSITIVE
+}
+
+enum FraudAlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model FraudAlert {
+  id              String              @id @default(uuid())
+  transactionId   String?
+  userId          String?
+  ruleId          String?
+  alertType       String
+  severity        FraudAlertSeverity  @default(MEDIUM)
+  status          FraudAlertStatus    @default(OPEN)
+  reason          String
+  details         Json?
+  riskScore       Int                 @default(0)
+
+  // Review
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  reviewNotes     String?
+
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  transaction     Transaction?        @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  rule            FraudRule?          @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+
+  @@index([transactionId])
+  @@index([userId])
+  @@index([status])
+  @@index([severity])
+}
+
+model FraudRule {
+  id              String    @id @default(uuid())
+  name            String
+  description     String?
+  ruleType        String
+  conditions      Json
+  severity        FraudAlertSeverity @default(MEDIUM)
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  alerts          FraudAlert[]
+
+  @@index([ruleType])
+  @@index([isActive])
+}
+
+// ============= REPORT MODELS =============
+
+enum ReportType {
+  DAILY
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+model Report {
+  id              String     @id @default(uuid())
+  reportType      ReportType
+  reportName      String
+  startDate       DateTime
+  endDate         DateTime
+  data            Json
+  generatedBy     String
+  fileUrl         String?
+  createdAt       DateTime   @default(now())
+
+  admin           Admin      @relation(fields: [generatedBy], references: [id], onDelete: Cascade)
+
+  @@index([reportType])
+  @@index([generatedBy])
+  @@index([createdAt])
+}
+
+// ============= SETTINGS MODELS =============
+
+model SystemSetting {
+  id              String   @id @default(uuid())
+  key             String   @unique
+  value           Json
+  description     String?
+  updatedBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([key])
+}
