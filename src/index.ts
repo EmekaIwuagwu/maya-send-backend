@@ -5,6 +5,7 @@ import { createServer } from 'http';
 import { config } from './config';
 import logger from './utils/logger';
 import adminRoutes from './routes/admin.routes';
+import userRoutes from './routes/user.routes';
 import AdminWebSocket from './websockets/admin.socket';
 
 const app = express();
@@ -36,6 +37,7 @@ app.get('/health', (req, res) => {
 
 // Routes
 app.use('/api/admin', adminRoutes);
+app.use('/api/user', userRoutes);
 
 // 404 handler
 app.use((req, res) => {
