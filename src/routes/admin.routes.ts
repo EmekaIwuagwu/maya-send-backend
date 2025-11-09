@@ -226,14 +226,51 @@ router.get(
   '/fraud/alerts',
   authenticateAdmin,
   requirePermission(AdminPermission.VIEW_FRAUD_ALERTS),
-  adminFraudController.handler
+  adminFraudController.getAlerts
+);
+router.get(
+  '/fraud/stats',
+  authenticateAdmin,
+  requirePermission(AdminPermission.VIEW_FRAUD_ALERTS),
+  adminFraudController.getStats
+);
+router.put(
+  '/fraud/alerts/:id',
+  authenticateAdmin,
+  requirePermission(AdminPermission.VIEW_FRAUD_ALERTS),
+  adminFraudController.updateAlert
+);
+router.get(
+  '/fraud/users/:userId/risk-score',
+  authenticateAdmin,
+  requirePermission(AdminPermission.VIEW_FRAUD_ALERTS),
+  adminFraudController.calculateRiskScore
+);
+router.get(
+  '/fraud/rules',
+  authenticateAdmin,
+  requirePermission(AdminPermission.VIEW_FRAUD_ALERTS),
+  adminFraudController.getRules
 );
 router.post(
   '/fraud/rules',
   authenticateAdmin,
   requirePermission(AdminPermission.MANAGE_FRAUD_RULES),
   auditLog(AuditAction.FRAUD_RULE_ADDED, 'fraud_rules'),
-  adminFraudController.handler
+  adminFraudController.createRule
+);
+router.put(
+  '/fraud/rules/:id',
+  authenticateAdmin,
+  requirePermission(AdminPermission.MANAGE_FRAUD_RULES),
+  auditLog(AuditAction.FRAUD_RULE_UPDATED, 'fraud_rules'),
+  adminFraudController.updateRule
+);
+router.delete(
+  '/fraud/rules/:id',
+  authenticateAdmin,
+  requirePermission(AdminPermission.MANAGE_FRAUD_RULES),
+  adminFraudController.deleteRule
 );
 
 // ============= SETTINGS =============
@@ -256,14 +293,26 @@ router.get(
   '/reports',
   authenticateAdmin,
   requirePermission(AdminPermission.VIEW_REPORTS),
-  adminReportsController.handler
+  adminReportsController.getReports
+);
+router.get(
+  '/reports/:id',
+  authenticateAdmin,
+  requirePermission(AdminPermission.VIEW_REPORTS),
+  adminReportsController.getReportById
 );
 router.post(
   '/reports/generate',
   authenticateAdmin,
   requirePermission(AdminPermission.GENERATE_REPORTS),
   auditLog(AuditAction.REPORT_GENERATED, 'reports'),
-  adminReportsController.handler
+  adminReportsController.generateReport
+);
+router.post(
+  '/reports/daily',
+  authenticateAdmin,
+  requirePermission(AdminPermission.GENERATE_REPORTS),
+  adminReportsController.generateDailyReport
 );
 
 // ============= ANALYTICS =============
@@ -280,7 +329,13 @@ router.get(
   '/audit-logs',
   authenticateAdmin,
   requirePermission(AdminPermission.VIEW_AUDIT_LOGS),
-  adminAuditController.handler
+  adminAuditController.getAuditLogs
+);
+router.get(
+  '/audit-logs/:resourceType/:resourceId',
+  authenticateAdmin,
+  requirePermission(AdminPermission.VIEW_AUDIT_LOGS),
+  adminAuditController.getResourceAuditTrail
 );
 
 // ============= SYSTEM =============
